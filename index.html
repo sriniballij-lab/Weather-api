@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Skyline Weather</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+        :root {
+            --ink: #172635;
+            --muted: #6b7c8c;
+            --sky: #dff4f5;
+            --paper: #fffdf8;
+            --teal: #087f8c;
+            --coral: #ef806d;
+            --line: rgba(23, 38, 53, 0.12);
+            --shadow: 0 24px 60px rgba(23, 38, 53, 0.16);
+        }
+
+        * { box-sizing: border-box; }
+
+        body {
+            margin: 0;
+            min-height: 100vh;
+            color: var(--ink);
+            font-family: "DM Sans", sans-serif;
+            background: #f6eee5;
+            background-image: radial-gradient(circle at 10% 15%, rgba(239, 128, 109, 0.24), transparent 28%),
+                radial-gradient(circle at 88% 85%, rgba(8, 127, 140, 0.18), transparent 32%);
+        }
+
+        .shell { width: min(1180px, calc(100% - 40px)); margin: 0 auto; padding: 38px 0 46px; }
+
+        header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; margin-bottom: 26px; }
+        .eyebrow { margin: 0 0 8px; color: var(--teal); font-size: 0.75rem; font-weight: 700; letter-spacing: 0.16em; text-transform: uppercase; }
+        h1 { margin: 0; font-family: "Space Grotesk", sans-serif; font-size: clamp(2.4rem, 6vw, 4.8rem); letter-spacing: -0.05em; line-height: 0.95; }
+        .intro { max-width: 300px; margin: 0 0 2px; color: var(--muted); line-height: 1.5; }
+
+        .dashboard { display: grid; grid-template-columns: minmax(0, 1.6fr) minmax(280px, 0.8fr); min-height: 590px; overflow: hidden; border: 1px solid rgba(255, 255, 255, 0.7); border-radius: 22px; background: var(--paper); box-shadow: var(--shadow); }
+        .map-wrap { position: relative; min-height: 590px; }
+        #map { width: 100%; height: 100%; min-height: 590px; }
+        .map-label { position: absolute; z-index: 500; top: 20px; left: 20px; padding: 10px 14px; border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 999px; color: var(--ink); background: rgba(255, 253, 248, 0.9); box-shadow: 0 8px 24px rgba(23, 38, 53, 0.12); font-size: 0.82rem; font-weight: 600; }
+
+        .details { display: flex; flex-direction: column; justify-content: space-between; padding: 34px 30px 28px; background: var(--sky); }
+        .details h2 { margin: 0; font-family: "Space Grotesk", sans-serif; font-size: 1.1rem; }
+        .search { display: flex; gap: 8px; margin: 20px 0 0; }
+        .search input { min-width: 0; flex: 1; padding: 12px 13px; border: 1px solid var(--line); border-radius: 10px; color: var(--ink); background: rgba(255, 255, 255, 0.72); font: inherit; outline: none; }
+        .search input:focus { border-color: var(--teal); box-shadow: 0 0 0 3px rgba(8, 127, 140, 0.12); }
+        .button { padding: 12px 15px; border: 0; border-radius: 10px; color: white; background: var(--teal); font: inherit; font-weight: 700; cursor: pointer; }
+        .button:hover { background: #066c76; }
+        .forecast-button { width: 100%; margin-top: 22px; }
+        .forecast { display: grid; grid-template-columns: repeat(2, 1fr); gap: 8px; margin-top: 16px; }
+        .forecast-day { padding: 10px; border: 1px solid var(--line); border-radius: 10px; background: rgba(255, 255, 255, 0.52); font-size: 0.75rem; }
+        .forecast-day strong, .forecast-day span { display: block; }
+        .forecast-day strong { margin-bottom: 5px; font-size: 0.8rem; }
+        .forecast-day span { color: var(--muted); }
+        .forecast-day .temps { margin-top: 7px; color: var(--ink); font-weight: 700; }
+        .forecast[hidden] { display: none; }
+        .weather-card { margin: 35px 0 auto; }
+        .weather-icon { display: grid; width: 76px; height: 76px; margin-bottom: 22px; place-items: center; border-radius: 50%; color: white; background: var(--coral); font-size: 2rem; box-shadow: 0 10px 22px rgba(239, 128, 109, 0.3); }
+        .temperature { margin: 0; font-family: "Space Grotesk", sans-serif; font-size: clamp(4rem, 8vw, 6rem); font-weight: 600; letter-spacing: -0.08em; line-height: 0.95; }
+        .condition { margin: 13px 0 0; color: var(--teal); font-size: 1.35rem; font-weight: 700; }
+        .empty-state { color: var(--muted); font-size: 1.05rem; line-height: 1.55; }
+        .location { padding-top: 24px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.85rem; line-height: 1.6; }
+        .location strong { display: block; color: var(--ink); font-size: 1rem; }
+        .status { min-height: 24px; margin: 22px 0 0; color: var(--teal); font-size: 0.84rem; font-weight: 600; }
+        .status.error { color: #bb493a; }
+
+        .leaflet-control-zoom a { color: var(--ink) !important; }
+        .leaflet-control-attribution { font-size: 9px; }
+
+        @media (max-width: 760px) {
+            .shell { width: min(100% - 24px, 600px); padding-top: 24px; }
+            header { display: block; }
+            .intro { margin-top: 16px; }
+            .dashboard { display: block; min-height: 0; }
+            .map-wrap, #map { min-height: 380px; height: 380px; }
+            .details { min-height: 390px; padding: 26px 24px 24px; }
+            .weather-card { margin-top: 25px; }
+        }
+    </style>
+</head>
+
+<body>
+    <main class="shell">
+        <header>
+            <div>
+                <p class="eyebrow">Live conditions</p>
+                <h1>Skyline<br>Weather</h1>
+            </div>
+            <p class="intro">Choose any point on the map to see what the sky is doing there right now.</p>
+        </header>
+
+        <section class="dashboard" aria-label="Weather map and current conditions">
+            <div class="map-wrap">
+                <div class="map-label">Explore the world</div>
+                <div id="map"></div>
+            </div>
+            <aside class="details">
+                <h2>Current conditions</h2>
+                <form class="search" id="search-form">
+                    <input id="location-input" list="location-options" type="search" placeholder="Search a city" aria-label="Search a city" autocomplete="off">
+                    <datalist id="location-options"></datalist>
+                    <button class="button" type="submit">Find</button>
+                </form>
+                <div class="weather-card">
+                    <div class="weather-icon" aria-hidden="true">☼</div>
+                    <p id="empty-state" class="empty-state">Click anywhere on the map to select a location and reveal its forecast.</p>
+                    <div id="result" hidden>
+                        <p id="temperature" class="temperature"></p>
+                        <p id="condition" class="condition"></p>
+                    </div>
+                    <button class="button forecast-button" id="forecast-button" type="button">Hide 7-day forecast</button>
+                    <div class="forecast" id="forecast"></div>
+                </div>
+                <div class="location">
+                    <strong id="coordinates">No location selected</strong>
+                    <span id="status">Ready when you are.</span>
+                </div>
+            </aside>
+        </section>
+    </main>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script>
+        const map = L.map("map").setView([20, 0], 2);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+        }).addTo(map);
+
+        let marker = null;
+        const emptyState = document.getElementById("empty-state");
+        const result = document.getElementById("result");
+        const status = document.getElementById("status");
+        const forecastButton = document.getElementById("forecast-button");
+        const forecastPanel = document.getElementById("forecast");
+        let latestForecast = [];
+
+        function dayName(date) {
+            return new Date(`${date}T12:00:00`).toLocaleDateString(undefined, { weekday: "short" });
+        }
+
+        function showForecast() {
+            forecastPanel.innerHTML = latestForecast.map((day) => `
+                <div class="forecast-day">
+                    <strong>${dayName(day.date)}</strong>
+                    <span>${day.condition}</span>
+                    <span class="temps">${Math.round(day.high)}° / ${Math.round(day.low)}°</span>
+                </div>
+            `).join("");
+            forecastPanel.hidden = false;
+            forecastButton.textContent = "Hide 7-day forecast";
+        }
+
+        async function loadWeather(lat, lon, label) {
+            const coordinates = document.getElementById("coordinates");
+            coordinates.textContent = label || `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
+            status.textContent = "Reading the atmosphere...";
+            status.className = "";
+            try {
+                const response = await fetch("/location", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ latitude: lat, longitude: lon })
+                });
+                if (!response.ok) throw new Error("Weather request failed");
+                const data = await response.json();
+                document.getElementById("temperature").textContent = `${data.temperature}°F`;
+                document.getElementById("condition").textContent = data.condition;
+                latestForecast = data.forecast;
+                showForecast();
+                emptyState.hidden = true;
+                result.hidden = false;
+                status.textContent = "Updated just now";
+            } catch (error) {
+                status.textContent = "Could not load weather. Try again.";
+                status.className = "error";
+            }
+        }
+
+        forecastButton.addEventListener("click", function () {
+            const isHidden = forecastPanel.hidden;
+            forecastPanel.hidden = !isHidden;
+            forecastButton.textContent = isHidden ? "Hide 7-day forecast" : "Show 7-day forecast";
+        });
+
+        document.getElementById("search-form").addEventListener("submit", async function (event) {
+            event.preventDefault();
+            const query = document.getElementById("location-input").value;
+            status.textContent = "Searching for that place...";
+            try {
+                const response = await fetch("/search", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ query })
+                });
+                const searchData = await response.json();
+                if (!response.ok) throw new Error(searchData.error);
+                const place = searchData.results?.[0] || searchData;
+                map.setView([place.latitude, place.longitude], 9);
+                if (marker === null) marker = L.marker([place.latitude, place.longitude]).addTo(map);
+                else marker.setLatLng([place.latitude, place.longitude]);
+                marker.bindPopup(`${place.name}, ${place.country}`).openPopup();
+                await loadWeather(place.latitude, place.longitude, `${place.name}, ${place.country}`);
+            } catch (error) {
+                status.textContent = error.message || "Location search failed.";
+                status.className = "error";
+            }
+        });
+
+        document.getElementById("location-input").addEventListener("input", async function (event) {
+            const query = event.target.value.trim();
+            if (query.length < 2) return;
+            const response = await fetch(`/search?query=${encodeURIComponent(query)}`);
+            if (!response.ok) return;
+            const data = await response.json();
+            document.getElementById("location-options").innerHTML = data.results.map((place) => {
+                const detail = [place.admin1, place.country].filter(Boolean).join(", ");
+                return `<option value="${place.name}">${detail}</option>`;
+            }).join("");
+        });
+
+        map.on("click", async function (event) {
+            const { lat, lng: lon } = event.latlng;
+            const coordinates = document.getElementById("coordinates");
+            coordinates.textContent = `${lat.toFixed(3)}°, ${lon.toFixed(3)}°`;
+            status.textContent = "Reading the atmosphere...";
+            status.className = "";
+
+            if (marker === null) {
+                marker = L.marker([lat, lon]).addTo(map);
+            } else {
+                marker.setLatLng([lat, lon]);
+            }
+
+            marker.bindPopup(`Latitude: ${lat.toFixed(4)}<br>Longitude: ${lon.toFixed(4)}`).openPopup();
+
+            await loadWeather(lat, lon);
+        });
+
+        loadWeather(20, 0, "Global view");
+    </script>
+</body>
+
+</html>
